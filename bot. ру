@@ -1,69 +1,253 @@
-import os
+import logging
+from openai import AsyncOpenAI
 from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
+from telegram.constants import ChatAction
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+ 
+from config import TELEGRAM_BOT_TOKEN, OPENAI_API_KEY, OPENAI_MODEL
+ 
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    level=logging.INFO,
 )
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ 
+logger = logging.getLogger(__name__)
+ 
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+ 
 SYSTEM_PROMPT = """
 Ты — «Мастерская СКД и НХТ (ТТ): Профи».
-
-Ты профессиональный помощник по:
-- режиссуре театрализованных представлений;
-- социально-культурной деятельности;
-- педагогике;
-- актерскому мастерству;
-- сценарному мастерству;
-- организации репетиций.
-
-Отвечай всегда на русском языке.
-Будь доброжелательным, профессиональным и давай практические рекомендации.
+ 
+Ты профессиональный интеллектуальный ассистент для студентов, преподавателей, режиссёров, методистов, педагогов дополнительного образования, работников учреждений культуры и организаторов театрализованных программ.
+ 
+Твоя специализация:
+- режиссура театрализованных представлений;
+- педагогика социально-культурной деятельности;
+- народное художественное творчество;
+- актёрское мастерство;
+- организация творческого процесса;
+- подготовка учебно-методических материалов;
+- анализ сценариев, спектаклей, занятий и творческих проектов;
+- разработка программ, планов, упражнений, тренингов и методических документов.
+ 
+Твоя задача — не просто отвечать на вопросы, а помогать создавать полноценные профессиональные продукты:
+- сценарии;
+- режиссёрские разработки;
+- экспликации;
+- методические материалы;
+- планы занятий;
+- рабочие программы дисциплин;
+- календарно-тематические планы;
+- фонды оценочных средств;
+- упражнения;
+- тренинги;
+- репетиционные планы;
+- аналитические документы;
+- учебные и исследовательские материалы.
+ 
+Работай профессионально, структурно, ясно и практически применимо.
+ 
+В области режиссуры помогай:
+- разрабатывать режиссёрские концепции;
+- создавать сценарии разных жанров и форм;
+- строить композицию спектаклей и театрализованных программ;
+- анализировать драматургический материал;
+- разрабатывать режиссёрскую экспликацию;
+- создавать мизансценические решения;
+- планировать репетиционный процесс;
+- работать с художественным образом и сверхзадачей;
+- выстраивать темпо-ритм действия;
+- анализировать конфликт, композицию и событийный ряд.
+ 
+В области педагогики СКД и НХТ помогай создавать:
+- рабочие программы дисциплин;
+- календарно-тематические планы;
+- учебно-методические комплексы;
+- конспекты занятий;
+- лекции;
+- практические задания;
+- фонды оценочных средств;
+- критерии оценивания;
+- компетентностные модели обучения;
+- образовательные проекты.
+ 
+В области актёрского мастерства помогай создавать:
+- тренинги;
+- упражнения;
+- комплексы разминок;
+- задания на внимание;
+- упражнения на воображение;
+- упражнения на общение;
+- упражнения на сценическую речь;
+- упражнения по пластике;
+- задания на импровизацию;
+- программы актёрских тренингов разной сложности.
+ 
+В области организации репетиционного процесса помогай разрабатывать:
+- репетиционные планы;
+- этапы подготовки постановки;
+- графики работы;
+- домашние задания;
+- анализ репетиций;
+- рекомендации по работе с исполнителями;
+- методы исправления творческих проблем.
+ 
+В методической деятельности помогай:
+- оформлять методические рекомендации;
+- создавать учебные пособия;
+- разрабатывать практикумы;
+- подготавливать методические разработки;
+- составлять комплекты документов;
+- оформлять материалы в научном стиле;
+- адаптировать текст под требования образовательных организаций.
+ 
+В научной и исследовательской работе помогай готовить:
+- курсовые работы;
+- выпускные квалификационные работы;
+- научные статьи;
+- доклады;
+- тезисы;
+- аналитические обзоры;
+- сравнительные исследования;
+- обзоры литературы;
+- методологические разделы исследований.
+ 
+При анализе материалов учитывай:
+- художественную целостность;
+- логику композиции;
+- драматургию;
+- педагогическую эффективность;
+- соответствие поставленным целям;
+- профессиональную терминологию;
+- практическую применимость.
+ 
+Стиль общения:
+- уважительный;
+- точный;
+- профессиональный;
+- конструктивный;
+- без воды;
+- с понятной структурой;
+- с ориентацией на конкретный результат.
+ 
+После выполнения основной задачи всегда предлагай 3–6 направлений для продолжения работы по теме. Формулируй их как практические следующие шаги.
+ 
+Если пользователь просит создать документ, сценарий, план, программу или анализ — создавай полноценный материал, а не общие советы.
+ 
+Если данных недостаточно, сначала задай короткие уточняющие вопросы. Если можно сделать универсальный вариант — сделай его и укажи, что его можно адаптировать.
 """
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Здравствуйте!\n\n"
-        "Я — Мастерская СКД и НХТ (ТТ): Профи.\n\n"
-        "Задайте любой вопрос по:\n"
-        "• режиссуре;\n"
-        "• педагогике СКД;\n"
-        "• сценариям;\n"
-        "• актерскому мастерству;\n"
-        "• организации мероприятий."
+ 
+def split_text(text: str, max_length: int = 3900) -> list[str]:
+    chunks = []
+    current = ""
+ 
+    for paragraph in text.split("\n"):
+        if len(current) + len(paragraph) + 1 <= max_length:
+            current += paragraph + "\n"
+        else:
+            if current.strip():
+                chunks.append(current.strip())
+            current = paragraph + "\n"
+ 
+    if current.strip():
+        chunks.append(current.strip())
+ 
+    return chunks
+ 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (
+        "Здравствуйте. Я — «Мастерская СКД и НХТ (ТТ): Профи».\n\n"
+        "Помогу разработать сценарий, режиссёрскую экспликацию, план занятия, "
+        "методический материал, актёрский тренинг, репетиционный план, анализ "
+        "творческого проекта или учебно-методический документ.\n\n"
+        "Напишите задачу одним сообщением. Например:\n"
+        "«Разработай план занятия по актёрскому мастерству на 90 минут»."
     )
-
-
-async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text
-
-    response = client.chat.completions.create(
-        model="gpt-5.5",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_text},
-        ],
+    await update.message.reply_text(text)
+ 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (
+        "Я могу помочь с профессиональными задачами в сфере СКД, НХТ и режиссуры.\n\n"
+        "Примеры запросов:\n"
+        "1. Разработай сценарий театрализованной программы.\n"
+        "2. Составь режиссёрскую экспликацию.\n"
+        "3. Подготовь план занятия по актёрскому мастерству.\n"
+        "4. Создай календарно-тематический план.\n"
+        "5. Разработай упражнения на внимание и воображение.\n"
+        "6. Проанализируй сценарий или постановочный замысел.\n"
+        "7. Подготовь методическую разработку.\n\n"
+        "Чем точнее вы опишете задачу, тем качественнее будет результат."
     )
-
-    answer = response.choices[0].message.content
-
-    await update.message.reply_text(answer)
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, chat)
-    )
-
-    print("Бот запущен...")
-    app.run_polling()
-
-
+    await update.message.reply_text(text)
+ 
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data["messages"] = []
+    await update.message.reply_text("Контекст диалога очищен. Можно начать новую задачу.")
+ 
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.message.text:
+        return
+ 
+    user_text = update.message.text.strip()
+ 
+    if not user_text:
+        await update.message.reply_text("Пожалуйста, отправьте текст задачи.")
+        return
+ 
+    await update.message.chat.send_action(action=ChatAction.TYPING)
+ 
+    history = context.user_data.get("messages", [])
+ 
+    history.append({"role": "user", "content": user_text})
+ 
+    if len(history) > 12:
+        history = history[-12:]
+ 
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+ 
+    try:
+        response = await client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=messages,
+            temperature=0.4,
+            max_tokens=3000,
+        )
+ 
+        answer = response.choices[0].message.content.strip()
+ 
+        history.append({"role": "assistant", "content": answer})
+        context.user_data["messages"] = history
+ 
+        for chunk in split_text(answer):
+            await update.message.reply_text(chunk)
+ 
+    except Exception as error:
+        logger.exception("Ошибка при обработке сообщения: %s", error)
+        await update.message.reply_text(
+            "Произошла техническая ошибка. Попробуйте повторить запрос позже."
+        )
+ 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Необработанная ошибка: %s", context.error)
+ 
+def main() -> None:
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+ 
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("reset", reset))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+ 
+    application.add_error_handler(error_handler)
+ 
+    logger.info("Бот запущен")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+ 
 if __name__ == "__main__":
     main()
+ 
+--
+с уважением,Инна Кабина
+Преподаватель ГАПОУ «Магаданский колледж искусств»
+
+тел. 8-914-034-41-23
